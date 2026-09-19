@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PhishGuard — Détecteur de tentatives de phishing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B1220;
+    --bg-2:#0F1830;
+    --surface:#121C34;
+    --surface-2:#182446;
+    --border:#26355C;
+    --text:#EAEEF7;
+    --muted:#8C9AC4;
+    --brand:#5FD4D0;
+    --brand-dim:#2C5A58;
+    --safe:#4ADE80;
+    --warn:#F2B44D;
+    --danger:#F0556B;
+    --danger-dim:#3A1C24;
+    --font-display:'Space Grotesk', 'IBM Plex Mono', monospace;
+    --font-body:'Inter', system-ui, sans-serif;
+    --font-mono:'IBM Plex Mono', 'Courier New', monospace;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#F3F5FB; --bg-2:#EDF0F9; --surface:#FFFFFF; --surface-2:#F5F7FC;
+      --border:#DCE2F0; --text:#131A2C; --muted:#5A6588;
+      --brand:#0E8E88; --brand-dim:#D8F2F0;
+      --safe:#178A4C; --warn:#946B12; --danger:#B23148; --danger-dim:#FBE4E8;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#F3F5FB; --bg-2:#EDF0F9; --surface:#FFFFFF; --surface-2:#F5F7FC;
+    --border:#DCE2F0; --text:#131A2C; --muted:#5A6588;
+    --brand:#0E8E88; --brand-dim:#D8F2F0;
+    --safe:#178A4C; --warn:#946B12; --danger:#B23148; --danger-dim:#FBE4E8;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0B1220; --bg-2:#0F1830; --surface:#121C34; --surface-2:#182446;
+    --border:#26355C; --text:#EAEEF7; --muted:#8C9AC4;
+    --brand:#5FD4D0; --brand-dim:#2C5A58;
+    --safe:#4ADE80; --warn:#F2B44D; --danger:#F0556B; --danger-dim:#3A1C24;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--font-body); line-height:1.55;
+    background-image:
+      radial-gradient(circle at 15% 0%, var(--bg-2) 0%, transparent 45%),
+      radial-gradient(circle at 100% 20%, var(--bg-2) 0%, transparent 40%);
+  }
+  a{color:var(--brand);}
+  :focus-visible{outline:2px solid var(--brand); outline-offset:3px;}
+  @media (prefers-reduced-motion: reduce){ *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;} }
+
+  .wrap{max-width:1040px; margin:0 auto; padding:0 24px;}
+
+  header{position:sticky; top:0; z-index:20; backdrop-filter:blur(10px); background:color-mix(in srgb, var(--bg) 82%, transparent); border-bottom:1px solid var(--border);}
+  nav{display:flex; align-items:center; justify-content:space-between; padding:16px 0;}
+  .brand{display:flex; align-items:center; gap:10px; font-family:var(--font-display); font-weight:700; font-size:1.15rem; letter-spacing:-0.01em;}
+  .brand-mark{width:28px; height:28px; flex:none;}
+  nav .links{display:flex; gap:28px; font-size:0.92rem; color:var(--muted);}
+  nav .links a{color:var(--muted); text-decoration:none;}
+  nav .links a:hover{color:var(--text);}
+
+  .hero{padding:56px 0 40px;}
+  .eyebrow{color:var(--brand); font-family:var(--font-mono); font-size:0.85rem; margin-bottom:14px;}
+  h1{font-family:var(--font-display); font-weight:600; font-size:clamp(2rem, 5vw, 2.9rem); line-height:1.08; margin:0 0 18px; max-width:14ch; letter-spacing:-0.015em;}
+  .lede{color:var(--muted); font-size:1.08rem; max-width:56ch; margin:0 0 36px;}
+
+  .scanner{background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; box-shadow:0 20px 60px -30px rgba(0,0,0,0.5);}
+  .scanner-bar{display:flex; align-items:center; gap:8px; padding:12px 18px; border-bottom:1px solid var(--border); background:var(--surface-2);}
+  .dot{width:9px; height:9px; border-radius:50%; background:var(--border);}
+  .scanner-bar span.label{margin-left:8px; font-family:var(--font-mono); font-size:0.78rem; color:var(--muted);}
+  .scanner-body{padding:22px;}
+  textarea{
+    width:100%; min-height:150px; resize:vertical; background:var(--bg); color:var(--text);
+    border:1px solid var(--border); border-radius:10px; padding:14px; font-family:var(--font-mono);
+    font-size:0.92rem; line-height:1.6;
+  }
+  textarea::placeholder{color:var(--muted);}
+  .scanner-actions{display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; align-items:center;}
+  button{font-family:var(--font-body); font-weight:600; font-size:0.92rem; cursor:pointer; border-radius:9px; border:1px solid transparent; padding:11px 20px; transition:transform 0.12s ease, background 0.15s ease;}
+  button:active{transform:scale(0.98);}
+  .btn-primary{background:var(--brand); color:var(--bg-2);}
+  .btn-primary:hover{background:color-mix(in srgb, var(--brand) 85%, white);}
+  .btn-ghost{background:transparent; border-color:var(--border); color:var(--muted);}
+  .btn-ghost:hover{color:var(--text); border-color:var(--muted);}
+  .sample-note{font-size:0.82rem; color:var(--muted); margin-left:auto;}
+
+  #results{margin-top:24px; display:none;}
+  #results.show{display:block;}
+  .verdict{display:flex; gap:20px; align-items:center; padding:20px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2); flex-wrap:wrap;}
+  .gauge{position:relative; width:110px; height:110px; flex:none;}
+  .gauge svg{width:100%; height:100%; transform:rotate(-90deg);}
+  .gauge-track{fill:none; stroke:var(--border); stroke-width:10;}
+  .gauge-fill{fill:none; stroke-width:10; stroke-linecap:round; transition:stroke-dashoffset 0.7s cubic-bezier(.3,.9,.3,1), stroke 0.4s ease;}
+  .gauge-num{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column;}
+  .gauge-num strong{font-family:var(--font-display); font-size:1.7rem; line-height:1;}
+  .gauge-num span{font-size:0.68rem; color:var(--muted); font-family:var(--font-mono);}
+  .verdict-text h2{font-family:var(--font-display); margin:0 0 6px; font-size:1.3rem;}
+  .verdict-text p{margin:0; color:var(--muted); max-width:44ch; font-size:0.95rem;}
+  .badge{display:inline-block; font-family:var(--font-mono); font-size:0.72rem; padding:3px 9px; border-radius:20px; margin-bottom:8px; border:1px solid currentColor;}
+
+  .signals{margin-top:18px; display:grid; gap:10px;}
+  .signal{display:flex; gap:12px; padding:14px 16px; border-radius:10px; border:1px solid var(--border); background:var(--surface);}
+  .signal.hit{border-color:color-mix(in srgb, var(--danger) 40%, var(--border));}
+  .signal-icon{flex:none; width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:0.85rem; font-weight:600; border:1px solid var(--border); color:var(--muted);}
+  .signal.hit .signal-icon{background:var(--danger-dim); color:var(--danger); border-color:transparent;}
+  .signal h3{margin:0 0 3px; font-size:0.95rem; font-family:var(--font-body); font-weight:600;}
+  .signal p{margin:0; font-size:0.86rem; color:var(--muted);}
+
+  section{padding:64px 0;}
+  .section-head{max-width:52ch; margin-bottom:32px;}
+  .section-head h2{font-family:var(--font-display); font-size:1.7rem; font-weight:600; margin:0 0 10px; letter-spacing:-0.01em;}
+  .section-head p{color:var(--muted); margin:0;}
+  .grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(230px,1fr)); gap:16px;}
+  .card{border:1px solid var(--border); border-radius:12px; padding:20px; background:var(--surface);}
+  .card .glyph{font-family:var(--font-mono); color:var(--brand); font-size:0.8rem; margin-bottom:10px;}
+  .card h3{margin:0 0 8px; font-size:1rem;}
+  .card p{margin:0; color:var(--muted); font-size:0.9rem;}
+
+  .divider{border:none; border-top:1px solid var(--border); margin:0;}
+
+  footer{padding:36px 0 56px; color:var(--muted); font-size:0.85rem;}
+  footer .wrap{display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; border-top:1px solid var(--border); padding-top:24px;}
+
+  ::selection{background:var(--brand); color:var(--bg-2);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <nav>
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L3 6v6c0 5 3.8 8.7 9 10 5.2-1.3 9-5 9-10V6l-9-4z" stroke="var(--brand)" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M8.5 12l2.4 2.4L15.5 9" stroke="var(--brand)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        PhishGuard
+      </div>
+      <div class="links">
+        <a href="#outil">Analyser</a>
+        <a href="#methode">Méthode</a>
+        <a href="#reflexes">Bons réflexes</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <section class="hero" id="outil" style="padding-bottom:0;">
+      <div class="eyebrow">Analyse locale · aucune donnée envoyée</div>
+      <h1>Un email vous paraît louche ?</h1>
+      <p class="lede">Collez le texte d'un email ou une URL suspecte. PhishGuard repère les signaux classiques d'une tentative de phishing — urgence artificielle, domaine imité, demande d'identifiants — et vous explique pourquoi.</p>
+
+      <div class="scanner">
+        <div class="scanner-bar">
+          <div class="dot" style="background:var(--danger);"></div>
+          <div class="dot" style="background:var(--warn);"></div>
+          <div class="dot" style="background:var(--safe);"></div>
+          <span class="label">scanner.txt</span>
+        </div>
+        <div class="scanner-body">
+          <textarea id="input" placeholder="Collez ici le texte de l'email ou l'URL à vérifier…"></textarea>
+          <div class="scanner-actions">
+            <button class="btn-primary" id="analyzeBtn">Analyser</button>
+            <button class="btn-ghost" id="sampleBad">Exemple de phishing</button>
+            <button class="btn-ghost" id="sampleGood">Exemple légitime</button>
+            <span class="sample-note" id="statusNote"></span>
+          </div>
+
+          <div id="results">
+            <div class="verdict">
+              <div class="gauge">
+                <svg viewBox="0 0 100 100">
+                  <circle class="gauge-track" cx="50" cy="50" r="42"></circle>
+                  <circle class="gauge-fill" id="gaugeFill" cx="50" cy="50" r="42"
+                    stroke-dasharray="264" stroke-dashoffset="264"></circle>
+                </svg>
+                <div class="gauge-num"><strong id="scoreNum">0</strong><span>/ 100</span></div>
+              </div>
+              <div class="verdict-text">
+                <div class="badge" id="badge">RISQUE</div>
+                <h2 id="verdictTitle">—</h2>
+                <p id="verdictDesc">—</p>
+              </div>
+            </div>
+            <div class="signals" id="signalsList"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <section id="methode">
+      <div class="section-head">
+        <h2>Ce que l'outil vérifie</h2>
+        <p>Sept familles de signaux, tirées des techniques d'ingénierie sociale les plus courantes. Chaque signal détecté pèse dans le score final.</p>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="glyph">urgence</div>
+          <h3>Urgence artificielle</h3>
+          <p>Délais courts, menaces de suspension, formulations qui poussent à agir sans réfléchir.</p>
+        </div>
+        <div class="card">
+          <div class="glyph">identifiants</div>
+          <h3>Demande d'identifiants</h3>
+          <p>Mots de passe, codes, numéros de carte ou de sécurité sociale demandés par email.</p>
+        </div>
+        <div class="card">
+          <div class="glyph">domaine</div>
+          <h3>Imitation de marque</h3>
+          <p>Un nom de domaine qui contient "paypal" ou "impots" sans être le vrai domaine officiel.</p>
+        </div>
+        <div class="card">
+          <div class="glyph">liens</div>
+          <h3>Liens suspects</h3>
+          <p>Raccourcisseurs d'URL, adresses IP brutes, tirets multiples, caractères punycode.</p>
+        </div>
+        <div class="card">
+          <div class="glyph">contenu</div>
+          <h3>Appât au gain</h3>
+          <p>Loteries, remboursements inattendus, cadeaux « trop beaux pour être vrais ».</p>
+        </div>
+        <div class="card">
+          <div class="glyph">formule</div>
+          <h3>Salutation générique</h3>
+          <p>« Cher client », « Dear user » — l'absence de votre vrai nom trahit un envoi de masse.</p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <section id="reflexes">
+      <div class="section-head">
+        <h2>Bons réflexes</h2>
+        <p>Le score aide à repérer les cas évidents, mais rien ne remplace la vigilance humaine.</p>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <h3>Vérifiez l'expéditeur</h3>
+          <p>Survolez le nom affiché pour voir la véritable adresse email derrière.</p>
+        </div>
+        <div class="card">
+          <h3>Ne cliquez pas, tapez</h3>
+          <p>Rendez-vous sur le site officiel en tapant l'adresse vous-même plutôt que via le lien reçu.</p>
+        </div>
+        <div class="card">
+          <h3>Contactez par un autre canal</h3>
+          <p>En cas de doute, appelez l'organisme via un numéro connu, pas celui indiqué dans l'email.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>PhishGuard — projet pédagogique de sensibilisation à la cybersécurité.</span>
+    <span>Analyse heuristique locale, à titre éducatif uniquement.</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  const input = document.getElementById('input');
+  const results = document.getElementById('results');
+  const signalsList = document.getElementById('signalsList');
+  const scoreNum = document.getElementById('scoreNum');
+  const gaugeFill = document.getElementById('gaugeFill');
+  const badge = document.getElementById('badge');
+  const verdictTitle = document.getElementById('verdictTitle');
+  const verdictDesc = document.getElementById('verdictDesc');
+  const statusNote = document.getElementById('statusNote');
+
+  const CIRC = 264;
+
+  const URGENCY = /\b(urgent|immédiat(e)?|expire|expir(e|er|era)|24 ?heures|24h|dernier délai|suspendu|suspension|bloqué|verrouillé|agir maintenant|sans délai|dans les plus brefs délais|account.*suspend|verify.*immediately|action required|limited time|urgent action)\b/i;
+
+  const CREDENTIALS = /\b(mot de passe|password|identifiant(s)?|numéro de carte|carte bancaire|code secret|code confidentiel|cvv|ssn|numéro de sécurité sociale|login|nom d'utilisateur|pin code)\b/i;
+
+  const GREED = /\b(félicitations|vous avez gagné|you('| ha)ve won|loterie|lottery|cadeau gratuit|remboursement (inattendu|exceptionnel)|jackpot|sélectionné(e)? pour recevoir|claim your prize)\b/i;
+
+  const GENERIC_GREETING = /\b(cher(e)? client(e)?|cher utilisateur|chère utilisatrice|dear customer|dear user|dear valued|cher membre)\b/i;
+
+  const URL_REGEX = /\b((?:https?:\/\/)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s]*)?)/gi;
+  const SHORTENERS = /\b(bit\.ly|tinyurl\.com|t\.co|goo\.gl|ow\.ly|is\.gd|buff\.ly|rebrand\.ly)\b/i;
+  const IP_URL = /https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/i;
+  const PUNYCODE = /xn--/i;
+  const AT_TRICK = /https?:\/\/[^\s\/]+@/i;
+
+  const BRANDS = ['paypal','apple','microsoft','google','amazon','netflix','banque','impots','laposte','orange','free','facebook','instagram','whatsapp','ameli','caf'];
+
+  function extractUrls(text){
+    return (text.match(URL_REGEX) || []).map(u => u.trim());
+  }
+
+  function getHostname(url){
+    try{
+      const withProto = url.match(/^https?:\/\//) ? url : 'http://' + url;
+      return new URL(withProto).hostname.toLowerCase();
+    }catch(e){ return url.toLowerCase(); }
+  }
+
+  function checkBrandImpersonation(urls){
+    for(const u of urls){
+      const host = getHostname(u);
+      for(const brand of BRANDS){
+        const officialGuess = host === brand + '.com' || host.endsWith('.' + brand + '.com');
+        if(host.includes(brand) && !officialGuess){
+          return {found:true, detail:`Le domaine « ${host} » contient « ${brand} » sans être son vrai domaine officiel.`};
+        }
+      }
+    }
+    return {found:false};
+  }
+
+  function checkSuspiciousLinks(urls){
+    const reasons = [];
+    for(const u of urls){
+      if(SHORTENERS.test(u)) reasons.push("raccourcisseur d'URL (destination masquée)");
+      if(IP_URL.test(u)) reasons.push("adresse IP brute au lieu d'un nom de domaine");
+      if(PUNYCODE.test(u)) reasons.push('encodage punycode (caractères trompeurs possibles)');
+      if(AT_TRICK.test(u)) reasons.push("symbole « @ » dans l'URL (technique de camouflage)");
+      const hyphens = (getHostname(u).match(/-/g) || []).length;
+      if(hyphens >= 2) reasons.push('domaine avec de nombreux tirets');
+    }
+    return reasons;
+  }
+
+  function runAnalysis(text){
+    const urls = extractUrls(text);
+    const brandCheck = checkBrandImpersonation(urls);
+    const linkReasons = checkSuspiciousLinks(urls);
+
+    const checks = [
+      {
+        id:'urgency', label:'Urgence artificielle', weight:20,
+        triggered: URGENCY.test(text),
+        detail: URGENCY.test(text)
+          ? "Le message utilise un vocabulaire de pression temporelle pour empêcher toute vérification."
+          : "Aucune formulation d'urgence détectée."
+      },
+      {
+        id:'credentials', label:"Demande d'identifiants", weight:25,
+        triggered: CREDENTIALS.test(text),
+        detail: CREDENTIALS.test(text)
+          ? "Le texte demande des identifiants, mots de passe ou données bancaires — un service légitime ne les demande jamais par email."
+          : "Aucune demande directe d'identifiants ou de données sensibles."
+      },
+      {
+        id:'brand', label:'Imitation de domaine', weight:25,
+        triggered: brandCheck.found,
+        detail: brandCheck.found ? brandCheck.detail : "Aucun domaine imitant une marque connue n'a été détecté."
+      },
+      {
+        id:'links', label:'Liens suspects', weight:20,
+        triggered: linkReasons.length > 0,
+        detail: linkReasons.length > 0
+          ? 'Signalé : ' + linkReasons.join(', ') + '.'
+          : (urls.length ? "Les liens détectés n'affichent pas de motif suspect connu." : 'Aucun lien à analyser dans ce texte.')
+      },
+      {
+        id:'greed', label:'Appât au gain', weight:15,
+        triggered: GREED.test(text),
+        detail: GREED.test(text)
+          ? "Le message promet un gain, un cadeau ou un remboursement inattendu — un classique de l'hameçonnage."
+          : 'Aucune promesse de gain détectée.'
+      },
+      {
+        id:'greeting', label:'Salutation générique', weight:10,
+        triggered: GENERIC_GREETING.test(text),
+        detail: GENERIC_GREETING.test(text)
+          ? "Le message s'adresse à vous de façon générique, sans votre nom — signe d'un envoi de masse."
+          : 'Pas de salutation générique détectée (ou aucune salutation).'
+      }
+    ];
+
+    const maxScore = checks.reduce((s,c) => s + c.weight, 0);
+    const rawScore = checks.reduce((s,c) => s + (c.triggered ? c.weight : 0), 0);
+    const score = Math.round((rawScore / maxScore) * 100);
+
+    return {score, checks, urlCount: urls.length};
+  }
+
+  function paintResult(result){
+    const {score, checks} = result;
+    scoreNum.textContent = score;
+
+    const offset = CIRC - (CIRC * score / 100);
+    gaugeFill.style.strokeDashoffset = offset;
+
+    let color, label, title, desc;
+    if(score >= 60){
+      color = 'var(--danger)'; label = 'RISQUE ÉLEVÉ';
+      title = 'Signaux multiples de phishing';
+      desc = "Ce message cumule plusieurs signaux classiques d'hameçonnage. Ne cliquez sur aucun lien et ne répondez pas.";
+    } else if(score >= 30){
+      color = 'var(--warn)'; label = 'RISQUE MODÉRÉ';
+      title = 'Quelques signaux à surveiller';
+      desc = "Certains éléments sont inhabituels. Vérifiez l'expéditeur et le domaine avant toute action.";
+    } else {
+      color = 'var(--safe)'; label = 'RISQUE FAIBLE';
+      title = 'Peu de signaux détectés';
+      desc = "Aucun motif fort de phishing repéré ici — restez tout de même attentif aux détails.";
+    }
+
+    gaugeFill.style.stroke = color;
+    badge.style.color = color;
+    badge.textContent = label;
+    verdictTitle.textContent = title;
+    verdictDesc.textContent = desc;
+
+    signalsList.innerHTML = '';
+    checks.forEach(c => {
+      const row = document.createElement('div');
+      row.className = 'signal' + (c.triggered ? ' hit' : '');
+      row.innerHTML = `
+        <div class="signal-icon">${c.triggered ? '!' : '✓'}</div>
+        <div>
+          <h3>${c.label}</h3>
+          <p>${c.detail}</p>
+        </div>`;
+      signalsList.appendChild(row);
+    });
+
+    results.classList.add('show');
+  }
+
+  document.getElementById('analyzeBtn').addEventListener('click', () => {
+    const text = input.value.trim();
+    if(!text){
+      statusNote.textContent = 'Collez un texte à analyser.';
+      setTimeout(() => statusNote.textContent = '', 2200);
+      return;
+    }
+    statusNote.textContent = '';
+    paintResult(runAnalysis(text));
+    results.scrollIntoView({behavior:'smooth', block:'nearest'});
+  });
+
+  document.getElementById('sampleBad').addEventListener('click', () => {
+    input.value = "Cher client,\n\nVotre compte PayPal a été suspendu pour activité inhabituelle. Vous devez vérifier votre identité dans les 24 heures sinon votre compte sera fermé définitivement.\n\nCliquez ici pour confirmer votre mot de passe et vos informations bancaires : http://paypal-secure-verification-account.com/login\n\nFélicitations, en vérifiant maintenant vous recevrez également un remboursement exceptionnel.\n\nL'équipe PayPal";
+  });
+
+  document.getElementById('sampleGood').addEventListener('click', () => {
+    input.value = "Bonjour Marie,\n\nMerci pour votre commande n°48213, elle est en cours de préparation et partira sous 2 jours ouvrés. Vous pouvez suivre son statut depuis votre espace client habituel.\n\nÀ bientôt,\nL'équipe logistique";
+  });
+})();
+</script>
+</body>
+  </html>
